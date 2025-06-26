@@ -26,7 +26,7 @@ A cross-distribution automatic update script for Linux systems that supports:
 
 ```bash
 # Download the script
-curl -O https://raw.githubusercontent.com/msolimantech1/universal-linux-updater/main/universal-updater.sh
+curl -O https://raw.githubusercontent.com/msolimantech1/universal-linux-updater/refs/heads/master/universal-updater.sh
 
 # Make it executable
 chmod +x universal-updater.sh
