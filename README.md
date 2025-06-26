@@ -33,6 +33,10 @@ chmod +x universal-updater.sh
 
 # Run the installer
 sudo ./universal-updater.sh
+
+# For albine
+apk add bash
+bash universal-updater.sh
 ```
 
 Follow the prompts to select your desired update frequency.
