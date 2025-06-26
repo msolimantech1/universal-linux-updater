@@ -1,13 +1,24 @@
 #!/bin/bash
 
-# Universal System Update Script with Enhanced Alpine Support
-VERSION="2.1"
+# Universal System Update Script v2.2
+VERSION="2.2"
 LOG_FILE="/var/log/auto-updater.log"
+
+# Check root privileges
+check_root() {
+    if [ "$(id -u)" -ne 0 ]; then
+        echo "This script must be run as root" >&2
+        exit 1
+    fi
+}
 
 # Initialize logging
 setup_logging() {
-    sudo touch "$LOG_FILE"
-    sudo chown "$(whoami)" "$LOG_FILE"
+    touch "$LOG_FILE" 2>/dev/null || {
+        echo "Cannot create log file at $LOG_FILE" >&2
+        LOG_FILE="$HOME/auto-updater.log"
+        echo "Using fallback log location: $LOG_FILE"
+    }
     exec > >(tee -a "$LOG_FILE") 2>&1
 }
 
@@ -47,26 +58,25 @@ detect_system() {
 set_update_commands() {
     case "$PKG_MANAGER" in
         apt)
-            UPDATE_CMD="sudo apt-get update -y && sudo apt-get upgrade -y"
-            CLEAN_CMD="sudo apt-get autoremove -y && sudo apt-get clean"
+            UPDATE_CMD="apt-get update -y && apt-get upgrade -y"
+            CLEAN_CMD="apt-get autoremove -y && apt-get clean"
             ;;
         dnf|yum)
-            UPDATE_CMD="sudo $PKG_MANAGER upgrade -y"
-            CLEAN_CMD="sudo $PKG_MANAGER autoremove -y"
+            UPDATE_CMD="$PKG_MANAGER upgrade -y"
+            CLEAN_CMD="$PKG_MANAGER autoremove -y"
             ;;
         pacman)
-            UPDATE_CMD="sudo pacman -Syu --noconfirm"
-            CLEAN_CMD="sudo pacman -Qtdq | sudo pacman -Rns --noconfirm -"
+            UPDATE_CMD="pacman -Syu --noconfirm"
+            CLEAN_CMD="pacman -Qtdq | pacman -Rns --noconfirm -"
             ;;
         zypper)
-            UPDATE_CMD="sudo zypper refresh && sudo zypper update -y"
-            CLEAN_CMD="sudo zypper packages --unneeded | awk -F'|' '/^i/ {print \$3}' | xargs -r sudo zypper remove -y"
+            UPDATE_CMD="zypper refresh && zypper update -y"
+            CLEAN_CMD="zypper packages --unneeded | awk -F'|' '/^i/ {print \$3}' | xargs -r zypper remove -y"
             ;;
         apk)
-            UPDATE_CMD="sudo apk update && sudo apk upgrade"
-            CLEAN_CMD="sudo apk cache clean"
-            # Alpine needs explicit cache directory creation
-            sudo mkdir -p /var/cache/apk
+            UPDATE_CMD="apk update && apk upgrade"
+            CLEAN_CMD="apk cache clean"
+            mkdir -p /var/cache/apk
             ;;
     esac
 }
@@ -90,15 +100,14 @@ perform_update() {
 install_systemd_service() {
     local service_file="/etc/systemd/system/auto-updater.service"
     
-    sudo bash -c "cat > $service_file" <<EOF
+    cat > "$service_file" <<EOF
 [Unit]
 Description=Automatic System Updater
 After=network.target
 
 [Service]
 Type=oneshot
-ExecStart=$PWD/$0 --run
-User=root
+ExecStart=$PWD/$(basename "$0") --run
 WorkingDirectory=$PWD
 StandardOutput=append:$LOG_FILE
 StandardError=append:$LOG_FILE
@@ -116,7 +125,7 @@ EOF
         monthly) calendar="*-*-01 00:00:00";;
     esac
 
-    sudo bash -c "cat > $timer_file" <<EOF
+    cat > "$timer_file" <<EOF
 [Unit]
 Description=Run auto-updater $period
 
@@ -130,11 +139,11 @@ RandomizedDelaySec=3600
 WantedBy=timers.target
 EOF
 
-    sudo systemctl daemon-reload
-    sudo systemctl enable --now auto-updater.timer
+    systemctl daemon-reload
+    systemctl enable --now auto-updater.timer
 }
 
-# Install as cron job (for Alpine/Non-systemd systems)
+# Install as cron job
 install_cron_job() {
     local cron_time=""
     
@@ -144,22 +153,23 @@ install_cron_job() {
         monthly) cron_time="0 0 1 * *";;
     esac
 
-    local cron_job="$cron_time $PWD/$0 --run >> $LOG_FILE 2>&1"
+    local cron_job="$cron_time $PWD/$(basename "$0") --run >> $LOG_FILE 2>&1"
     
-    if ! (crontab -l 2>/dev/null | grep -qF "$0"); then
+    if ! (crontab -l 2>/dev/null | grep -qF "$(basename "$0")"); then
         (crontab -l 2>/dev/null; echo "$cron_job") | crontab -
     fi
     
-    # Ensure cron service is running (especially for Alpine)
+    # Ensure cron service is running
     if [ -f "/etc/init.d/crond" ]; then
-        sudo /etc/init.d/crond start
+        /etc/init.d/crond start
     elif [ -f "/etc/init.d/cron" ]; then
-        sudo /etc/init.d/cron start
+        /etc/init.d/cron start
     fi
 }
 
 # Main script execution
 main() {
+    check_root
     setup_logging
     detect_system
     set_update_commands
@@ -193,7 +203,7 @@ main() {
     else
         install_cron_job
         echo "Installed cron job:"
-        crontab -l | grep "$0"
+        crontab -l | grep "$(basename "$0")"
     fi
 
     echo "Logging to: $LOG_FILE"
