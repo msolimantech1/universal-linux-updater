@@ -33,7 +33,8 @@ detect_system() {
     fi
 
     declare -A PKG_MANAGERS=(
-        ["apt"]="/usr/bin/apt-get"
+        ["old-apt"]="/usr/bin/apt-get"
+        ["new-apt"]="/usr/bin/apt"
         ["dnf"]="/usr/bin/dnf"
         ["yum"]="/usr/bin/yum"
         ["pacman"]="/usr/bin/pacman"
@@ -57,9 +58,13 @@ detect_system() {
 # Define update commands for each package manager
 set_update_commands() {
     case "$PKG_MANAGER" in
-        apt)
+        old-apt)
             UPDATE_CMD="apt-get update -y && apt-get upgrade -y"
             CLEAN_CMD="apt-get autoremove -y && apt-get clean"
+            ;;
+        new-apt)
+            UPDATE_CMD="apt update -y && apt upgrade -y"
+            CLEAN_CMD="apt autoremove -y && apt clean"
             ;;
         dnf|yum)
             UPDATE_CMD="$PKG_MANAGER upgrade -y"
